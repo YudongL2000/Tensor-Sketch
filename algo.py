@@ -2,8 +2,59 @@ import numpy as np
 from numpy import linalg as LA
 import time
 import os
+from numpy.random import seed, randint
+from numpy import polymul, pad
+from numpy.fft import fft, ifft
+from timeit import default_timer as timer
+from numpy.fft import rfft, irfft
 
-from TensorSketch import FFT_CountSketch_k_Naive
+#tensor sketch implementation
+def fft_prod(arr_a, arr_b):  #fft based real-valued polynomial multiplication
+    L = len(arr_a) + len(arr_b)
+    a_f = rfft(arr_a, L)
+    b_f = rfft(arr_b, L)
+    return irfft(a_f * b_f)
+
+def countSketchInMemroy(matrixA, s):
+    m, n = matrixA.shape
+    matrixC = np.zeros([m, s])
+    hashedIndices = np.random.choice(s, n, replace=True)
+    randSigns = np.random.choice(2, n, replace=True) * 2 - 1 # a n-by-1{+1, -1} vector
+    matrixA = matrixA * randSigns.reshape(1, n) # flip the signs of 50% columns of A
+    for i in range(s):
+        idx = (hashedIndices == i)
+        matrixC[:, i] = np.sum(matrixA[:, idx], 1)
+    return matrixC
+    
+def tensor_sketch(v1, v2, CS_DIM):
+  assert(len(v1.shape)==2)
+  assert(len(v2.shape)==2)
+  dim1 = v1.shape[-1]
+  dim2 = v2.shape[-1]
+  assert(dim1 == dim2)
+  sketched_vec1 = countSketchInMemroy(v1, CS_DIM)
+  sketched_vec2 = countSketchInMemroy(v2, CS_DIM)
+  fft_res = []
+  for i in range(sketched_vec1.shape[0]):
+    fft_res.append(fft_prod(sketched_vec1[i], sketched_vec2[i]))
+  fft_res = np.array(fft_res)
+  assert(fft_res.shape[-1] == 2 * sketched_vec1.shape[-1])
+  res = []
+  for i in range(fft_res.shape[0]):
+    tmp = np.zeros(sketched_vec1.shape[-1])
+    for j in range(sketched_vec1.shape[-1]):
+      tmp[j] = fft_res[i, j] + fft_res[i, j+sketched_vec1.shape[-1]]
+    res.append(tmp)
+  res = np.array(res)
+  return res
+
+
+
+
+
+
+
+
 
 dim_n = 5
 
@@ -103,8 +154,8 @@ def tensor_algo(inputs):
   for input in inputs:
     # s1 = sketch_outer_prod(input[1], input[2])
     # s2 = sketch_outer_prod(input[0], input[2])
-    s1 = FFT_CountSketch_k_Naive(np.vstack((input[1], input[2])).T, 2, sketch_dim)
-    s2 = FFT_CountSketch_k_Naive(np.vstack((input[0], input[2])).T, 2, sketch_dim)
+    s1 = tensor_sketch(np.reshape(input[1], (1, len(input[1]))), np.reshape(input[2], (1, len(input[2]))), sketch_dim)
+    s2 = tensor_sketch(np.reshape(input[0], (1, len(input[0]))), np.reshape(input[2], (1, len(input[2]))), sketch_dim)
     print(s1.shape)
     s3 = sketch_outer_prod2(input[0], input[1])
     A1_R += np.outer(input[0], s1)
