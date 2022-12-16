@@ -15,25 +15,25 @@ def fft_prod(arr_a, arr_b):  #fft based real-valued polynomial multiplication
     b_f = rfft(arr_b, L)
     return irfft(a_f * b_f)
 
-def countSketchInMemroy(matrixA, s):
+def countSketchInMemroy(matrixA, s, hashedIndices, randSigns):
     m, n = matrixA.shape
     matrixC = np.zeros([m, s])
-    hashedIndices = np.random.choice(s, n, replace=True)
-    randSigns = np.random.choice(2, n, replace=True) * 2 - 1 # a n-by-1{+1, -1} vector
-    matrixA = matrixA * randSigns.reshape(1, n) # flip the signs of 50% columns of A
+    #hashedIndices = np.random.choice(s, n, replace=True)
+    #randSigns = np.random.choice(2, n, replace=True) * 2 - 1 # a n-by-1{+1, -1} vector
+    matrixA = matrixA * randSigns.reshape(1, n) 
     for i in range(s):
         idx = (hashedIndices == i)
         matrixC[:, i] = np.sum(matrixA[:, idx], 1)
     return matrixC
     
-def tensor_sketch(v1, v2, CS_DIM):
+def tensor_sketch(v1, v2, CS_DIM, hashedIndices, randSigns):
   assert(len(v1.shape)==2)
   assert(len(v2.shape)==2)
   dim1 = v1.shape[-1]
   dim2 = v2.shape[-1]
   assert(dim1 == dim2)
-  sketched_vec1 = countSketchInMemroy(v1, CS_DIM)
-  sketched_vec2 = countSketchInMemroy(v2, CS_DIM)
+  sketched_vec1 = countSketchInMemroy(v1, CS_DIM, hashedIndices, randSigns)
+  sketched_vec2 = countSketchInMemroy(v2, CS_DIM, hashedIndices, randSigns)
   fft_res = []
   for i in range(sketched_vec1.shape[0]):
     fft_res.append(fft_prod(sketched_vec1[i], sketched_vec2[i]))
@@ -151,13 +151,15 @@ def tensor_algo(inputs):
   A1_R = np.zeros([dim_n, sketch_dim])
   A2_R = np.zeros([dim_n, sketch_dim])
   A3_T = np.zeros([dim_n, sketch_dim2])
+  hashedIndices_tensor = np.random.choice(sketch_dim, inputs.shape[-1], replace=True)
+  randSigns_tensor = np.random.choice(2, inputs.shape[-1], replace=True) * 2 - 1
   for input in inputs:
     # s1 = sketch_outer_prod(input[1], input[2])
     # s2 = sketch_outer_prod(input[0], input[2])
-    s1 = tensor_sketch(np.reshape(input[1], (1, len(input[1]))), np.reshape(input[2], (1, len(input[2]))), sketch_dim)
-    s2 = tensor_sketch(np.reshape(input[0], (1, len(input[0]))), np.reshape(input[2], (1, len(input[2]))), sketch_dim)
-    print(s1.shape)
     s3 = sketch_outer_prod2(input[0], input[1])
+    s1 = tensor_sketch(np.reshape(input[1], (1, len(input[1]))), np.reshape(input[2], (1, len(input[2]))), sketch_dim, hashedIndices_tensor, randSigns_tensor)
+    s2 = tensor_sketch(np.reshape(input[0], (1, len(input[0]))), np.reshape(input[2], (1, len(input[2]))), sketch_dim, hashedIndices_tensor, randSigns_tensor)
+    #s3 = tensor_sketch(np.reshape(input[0], (1, len(input[0]))), np.reshape(input[1], (1, len(input[1]))), sketch_dim2)
     A1_R += np.outer(input[0], s1)
     A2_R += np.outer(input[1], s2)
     A3_T += np.outer(input[2], s3)
